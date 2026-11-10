@@ -118,7 +118,7 @@ const AppContent: React.FC = () => {
 
   const renderPublicView = () => {
     switch (currentView) {
-      case 'cms_page': return <DynamicCmsPage slug={decodeURIComponent(window.location.pathname.split('/').at(-1) ?? '')} />;
+      case 'cms_page': return <DynamicCmsPage slug={decodeURIComponent(window.location.pathname.split('/').filter(Boolean).at(-1) || 'home')} />;
       case 'home': return <Home />;
       case 'impact': return <Home />;
       case 'about': return <About />;
