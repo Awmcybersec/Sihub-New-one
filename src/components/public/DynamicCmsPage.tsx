@@ -113,7 +113,7 @@ export const DynamicCmsPage: React.FC<{ slug: string }> = ({ slug }) => {
   // Filter out duplicate seeded top sections that duplicate page hero
   const sections = (page.sections ?? []).filter((section) => {
     if (!section.visible || section.archived) return false;
-    const isDuplicateHero = (section.title === page.heading || section.title === page.title) && section.placement === 'top';
+    const isDuplicateHero = (section.name === page.heading || section.name === page.title) && section.placement === 'top';
     return !isDuplicateHero;
   }).sort((left, right) => left.order - right.order);
 

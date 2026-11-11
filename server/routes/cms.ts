@@ -597,35 +597,190 @@ router.post('/admin/:id/revisions/:revisionId/restore', authenticate, authorize(
   res.json({ entry });
 }));
 
-router.get('/:type/:slug', asyncRoute(async (req, res) => {
-  try {
-    const entry = await database.cmsEntry.findFirst({ where: { type: req.params.type, slug: req.params.slug, status: PublicationStatus.PUBLISHED, deletedAt: null } });
-    if (!entry) throw httpError(404, 'Content not found');
-    res.json({
-      entry: {
-        ...entry,
-        content: stripInternalCmsFields(entry.content)
-      }
+  // =========================================================================
+  // DEDICATED PAGES API (Supports all 34 public website pages)
+  // =========================================================================
+  router.get('/pages', asyncRoute(async (_req, res) => {
+    const dbPages = await database.cmsEntry.findMany({
+      where: { type: 'page', deletedAt: null }
     });
-  } catch (error) {
-    if (error && typeof error === 'object' && 'status' in error && error.status === 404) throw error;
-    res.status(404).json({ error: 'Content not found' });
-  }
-}));
 
-router.get('/:type', asyncRoute(async (req, res) => {
-  try {
-    const entries = await database.cmsEntry.findMany({ where: { type: req.params.type, status: PublicationStatus.PUBLISHED, deletedAt: null }, orderBy: { publishedAt: 'desc' } });
-    res.json({
-      entries: entries.map(entry => ({
-        ...entry,
-        content: stripInternalCmsFields(entry.content)
-      }))
+    const map = new Map<string, any>();
+    for (const sub of OFFICIAL_WEBSITE_SUBSECTIONS) {
+      map.set(sub.slug, {
+        slug: sub.slug,
+        title: sub.title,
+        heading: sub.heading,
+        categoryKey: sub.categoryKey,
+        categoryTitle: sub.categoryTitle,
+        publicPath: sub.publicPath,
+        status: 'PUBLISHED',
+        published: true
+      });
+    }
+    for (const page of dbPages) {
+      map.set(page.slug, {
+        id: page.id,
+        slug: page.slug,
+        title: page.title,
+        status: page.status,
+        published: page.status === PublicationStatus.PUBLISHED,
+        updatedAt: page.updatedAt,
+        content: page.content
+      });
+    }
+
+    res.json({ pages: Array.from(map.values()) });
+  }));
+
+  router.get('/pages/:slug', asyncRoute(async (req, res) => {
+    const { slug } = req.params;
+    const dbEntry = await database.cmsEntry.findFirst({
+      where: { type: 'page', slug, deletedAt: null }
     });
-  } catch {
-    res.json({ entries: [] });
-  }
-}));
+
+    if (dbEntry) {
+      const content = (stripInternalCmsFields(dbEntry.content) || {}) as Record<string, unknown>;
+      return res.json({
+        id: dbEntry.id,
+        slug: dbEntry.slug,
+        title: dbEntry.title,
+        heading: (content.heading as string) || dbEntry.title,
+        summary: dbEntry.summary || (content.summary as string) || (content.description as string) || '',
+        description: (content.description as string) || dbEntry.summary || '',
+        subheading: (content.subheading as string) || '',
+        heroBadge: (content.heroBadge as string) || '',
+        status: dbEntry.status,
+        published: dbEntry.status === PublicationStatus.PUBLISHED,
+        updatedAt: dbEntry.updatedAt,
+        ...content
+      });
+    }
+
+    const officialSub = OFFICIAL_WEBSITE_SUBSECTIONS.find(s => s.slug === slug);
+    if (officialSub) {
+      return res.json({
+        slug: officialSub.slug,
+        title: officialSub.title,
+        heading: officialSub.heading,
+        subheading: officialSub.subheading,
+        summary: officialSub.description,
+        description: officialSub.description,
+        categoryKey: officialSub.categoryKey,
+        categoryTitle: officialSub.categoryTitle,
+        heroBadge: officialSub.categoryTitle,
+        publicPath: officialSub.publicPath,
+        published: true,
+        cta: { label: 'Explore Programme', url: '/contact', variant: 'primary' }
+      });
+    }
+
+    res.status(404).json({ error: `Page '${slug}' not found` });
+  }));
+
+  router.put('/pages/:slug', asyncRoute(async (req, res) => {
+    const { slug } = req.params;
+    const body = req.body || {};
+    const isPublish = body.published !== false;
+    const status = isPublish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    const title = body.title || body.heading || slug;
+    const summary = body.summary || body.description || '';
+
+    const { id: _ignoreId, slug: _ignoreSlug, title: _t, summary: _s, status: _st, published: _p, ...contentData } = body;
+
+    const existing = await database.cmsEntry.findFirst({
+      where: { type: 'page', slug, deletedAt: null }
+    });
+
+    let savedEntry;
+    if (existing) {
+      savedEntry = await database.cmsEntry.update({
+        where: { id: existing.id },
+        data: {
+          title,
+          summary,
+          content: contentData as Prisma.InputJsonValue,
+          status,
+          publishedAt: isPublish ? (existing.publishedAt || new Date()) : null
+        }
+      });
+    } else {
+      const author = await prisma.user.findFirst({ where: { role: Role.OWNER } });
+      savedEntry = await database.cmsEntry.create({
+        data: {
+          type: 'page',
+          slug,
+          title,
+          summary,
+          content: contentData as Prisma.InputJsonValue,
+          status,
+          publishedAt: isPublish ? new Date() : null,
+          authorId: author?.id
+        }
+      });
+    }
+
+    res.json({
+      id: savedEntry.id,
+      slug: savedEntry.slug,
+      title: savedEntry.title,
+      status: savedEntry.status,
+      published: savedEntry.status === PublicationStatus.PUBLISHED,
+      updatedAt: savedEntry.updatedAt,
+      ...contentData
+    });
+  }));
+
+  router.get('/:type/:slug', asyncRoute(async (req, res) => {
+    try {
+      const entry = await database.cmsEntry.findFirst({ where: { type: req.params.type, slug: req.params.slug, status: PublicationStatus.PUBLISHED, deletedAt: null } });
+      if (!entry) {
+        if (req.params.type === 'page') {
+          const officialSub = OFFICIAL_WEBSITE_SUBSECTIONS.find(s => s.slug === req.params.slug);
+          if (officialSub) {
+            return res.json({
+              entry: {
+                id: `seeded-${officialSub.slug}`,
+                slug: officialSub.slug,
+                type: 'page',
+                title: officialSub.title,
+                summary: officialSub.description,
+                status: 'PUBLISHED',
+                content: {
+                  ...officialSub,
+                  published: true
+                }
+              }
+            });
+          }
+        }
+        throw httpError(404, 'Content not found');
+      }
+      res.json({
+        entry: {
+          ...entry,
+          content: stripInternalCmsFields(entry.content)
+        }
+      });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'status' in error && error.status === 404) throw error;
+      res.status(404).json({ error: 'Content not found' });
+    }
+  }));
+
+  router.get('/:type', asyncRoute(async (req, res) => {
+    try {
+      const entries = await database.cmsEntry.findMany({ where: { type: req.params.type, status: PublicationStatus.PUBLISHED, deletedAt: null }, orderBy: { publishedAt: 'desc' } });
+      res.json({
+        entries: entries.map(entry => ({
+          ...entry,
+          content: stripInternalCmsFields(entry.content)
+        }))
+      });
+    } catch {
+      res.json({ entries: [] });
+    }
+  }));
 
 return router;
 };

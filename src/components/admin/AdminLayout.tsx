@@ -76,7 +76,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { tab: 'mentorship', label: '6.9 Mentorship Desk', shortLabel: 'Mentorship', icon: <Compass className="w-4 h-4" /> },
     { tab: 'opportunities', label: '6.10 Grants & Jobs', shortLabel: 'Grants', icon: <Award className="w-4 h-4" /> },
     { tab: 'partnerships', label: '6.11 Partnerships & MOUs', shortLabel: 'Partners', icon: <Handshake className="w-4 h-4" /> },
-    { tab: 'content', label: '6.0 Website Builder & CMS', shortLabel: 'Website Builder', icon: <Sparkles className="w-4 h-4 text-cyan-400" />, badge: 'Builder' },
+    { tab: 'content', label: 'BUILD — Website & CMS', shortLabel: 'BUILD', icon: <Sparkles className="w-4 h-4 text-cyan-400" />, badge: 'BUILD' },
     { tab: 'media', label: '6.13 Media Library', shortLabel: 'Media', icon: <Images className="w-4 h-4" /> },
     { tab: 'impact', label: '6.14 Impact & Analytics', shortLabel: 'Impact', icon: <BarChart3 className="w-4 h-4" /> },
     { tab: 'ai', label: '6.15 AI Assistant Settings', shortLabel: 'AI Config', icon: <Bot className="w-4 h-4" />, badge: 'Config' },

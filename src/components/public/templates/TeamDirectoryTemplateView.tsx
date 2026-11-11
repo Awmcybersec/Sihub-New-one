@@ -70,9 +70,9 @@ export const TeamDirectoryTemplateView: React.FC<TemplateProps> = ({ page, onNav
           return (
             <div key={idx} className="p-6 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 text-center">
               <div className="space-y-3">
-                {member.image ? (
+                {(member as any).image ? (
                   <img
-                    src={member.image}
+                    src={(member as any).image}
                     alt={member.name}
                     className="w-24 h-24 rounded-full mx-auto object-cover ring-2 ring-cyan-600/20"
                   />

@@ -76,6 +76,7 @@ import { AboutManagerArea } from './cms/AboutManagerArea';
 import { WebsiteHierarchyNavigator } from './cms/WebsiteHierarchyNavigator';
 import { VisualSectionPlacementModal, VisualPlacement } from './cms/VisualSectionPlacementModal';
 import { PageHeroMetadataEditor } from './cms/PageHeroMetadataEditor';
+import { PreDesignedPageEditor } from './cms/PreDesignedPageEditor';
 
 type CmsStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'PUBLISHED' | 'REJECTED' | 'ARCHIVED';
 
@@ -255,10 +256,10 @@ const officialNavHierarchy: NavCategory[] = [
 export const AdminWebsiteBuilder: React.FC = () => {
   const { addToast, navigateTo } = useApp();
 
-  // Active Top Navigation Tab (12 integrated areas)
+  // Active Top Navigation Tab (BUILD WORKSPACE)
   const [activeArea, setActiveArea] = useState<
-    'studio' | 'about' | 'overview' | 'pages' | 'navigation' | 'sections' | 'media' | 'templates' | 'styling' | 'publishing' | 'revisions' | 'settings'
-  >('studio');
+    'builder' | 'overview' | 'pages' | 'studio' | 'sections' | 'media' | 'publishing' | 'navigation' | 'templates' | 'styling' | 'revisions' | 'settings' | 'about'
+  >('builder');
 
   // History Undo / Redo Stack (25 steps deep)
   const [undoStack, setUndoStack] = useState<CmsPageSection[][]>([]);
@@ -1408,21 +1409,21 @@ export const AdminWebsiteBuilder: React.FC = () => {
         </div>
       </header>
 
-      {/* 12 Integrated Areas Navigation Tabs */}
+      {/* BUILD WORKSPACE Master Navigation Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none border-b border-slate-800">
         {[
-          { key: 'studio', label: 'Visual Studio & Canvas', icon: <Sliders className="w-4 h-4" /> },
-          { key: 'about', label: 'About SiHub (Non-Technical)', icon: <ShieldCheck className="w-4 h-4 text-emerald-400" /> },
-          { key: 'overview', label: 'CMS Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
-          { key: 'pages', label: 'Pages Manager', icon: <FileText className="w-4 h-4" />, count: pageEntries.length },
-          { key: 'navigation', label: 'Navigation Manager', icon: <Layers className="w-4 h-4" /> },
-          { key: 'sections', label: 'Sections & Blocks Catalog', icon: <Grid className="w-4 h-4" /> },
-          { key: 'media', label: 'Media Library', icon: <ImageIcon className="w-4 h-4" />, count: media.length },
-          { key: 'templates', label: 'Page Templates', icon: <LayoutTemplate className="w-4 h-4" /> },
+          { key: 'builder', label: 'C. Visual Page Builder', icon: <Sparkles className="w-4 h-4 text-cyan-400" /> },
+          { key: 'overview', label: 'A. Website Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+          { key: 'pages', label: 'B. All 34 Pages', icon: <FileText className="w-4 h-4" />, count: pageEntries.length },
+          { key: 'studio', label: 'D. Section Builder', icon: <Sliders className="w-4 h-4" /> },
+          { key: 'media', label: 'E. Media Library', icon: <ImageIcon className="w-4 h-4" />, count: media.length },
+          { key: 'publishing', label: 'F. Publishing & Drafts', icon: <GitPullRequest className="w-4 h-4" /> },
+          { key: 'sections', label: 'Blocks Catalog', icon: <Grid className="w-4 h-4" /> },
+          { key: 'navigation', label: 'Navigation Menu', icon: <Layers className="w-4 h-4" /> },
           { key: 'styling', label: 'Design & Styling', icon: <Palette className="w-4 h-4" /> },
-          { key: 'publishing', label: 'Drafts & Publishing', icon: <GitPullRequest className="w-4 h-4" /> },
           { key: 'revisions', label: 'Revision History', icon: <History className="w-4 h-4" />, count: revisions.length },
-          { key: 'settings', label: 'SEO & Website Settings', icon: <Settings className="w-4 h-4" /> }
+          { key: 'settings', label: 'SEO & Website Settings', icon: <Settings className="w-4 h-4" /> },
+          { key: 'about', label: 'About Mandate', icon: <ShieldCheck className="w-4 h-4 text-emerald-400" /> }
         ].map(tab => (
           <button
             key={tab.key}
@@ -1467,7 +1468,20 @@ export const AdminWebsiteBuilder: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* AREA 1: VISUAL STUDIO & RESPONSIVE CANVAS (Centerpiece 3-Panel Experience) */}
+      {/* AREA C: VISUAL PAGE BUILDER (PRE-DESIGNED CONTENT FORMS FOR ALL 34 PAGES) */}
+      {/* ========================================================================= */}
+      {activeArea === 'builder' && (
+        <PreDesignedPageEditor
+          initialSlug={selectedPage?.slug || 'vision'}
+          onPageSaved={(saved) => {
+            addToast('success', 'Page Updated', `${saved.title} content saved successfully.`);
+            void loadData(false);
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* AREA D: SECTION BUILDER & VISUAL STUDIO CANVAS                            */}
       {/* ========================================================================= */}
       {activeArea === 'studio' && (
         <div className="space-y-4">

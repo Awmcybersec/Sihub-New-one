@@ -39,9 +39,10 @@ import {
   Award,
   Handshake
 } from 'lucide-react';
-import { officialWebsiteHierarchy, HierarchyCategory, HierarchyPage } from './WebsiteHierarchyNavigator';
+import { OFFICIAL_HIERARCHY, HierarchyPillar, HierarchySubsection } from './WebsiteHierarchyNavigator';
 import { getTemplateTypeForSlug, getTemplateMetadata, PageTemplateType } from '../../../types/pageTemplates';
 import type { DynamicPageContent } from '../../public/DynamicCmsPage';
+import { apiGet, apiPut } from '../../../services/apiClient';
 
 // Import template view components for the live preview mode
 import { HomeFlagshipTemplateView } from '../../public/templates/HomeFlagshipTemplateView';
@@ -81,8 +82,8 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Find currently selected hierarchy items
-  const currentCategory = officialWebsiteHierarchy.find((c) => c.key === selectedCategoryKey) || officialWebsiteHierarchy[1];
-  const allPages = officialWebsiteHierarchy.flatMap((c) => c.pages);
+  const currentCategory = OFFICIAL_HIERARCHY.find((c) => c.key === selectedCategoryKey) || OFFICIAL_HIERARCHY[1];
+  const allPages = OFFICIAL_HIERARCHY.flatMap((c) => c.subsections);
   const currentPageHierarchy = allPages.find((p) => p.slug === selectedSlug) || allPages[1];
   const templateType: PageTemplateType = getTemplateTypeForSlug(selectedSlug);
   const templateMeta = getTemplateMetadata(templateType);
@@ -94,13 +95,7 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
     setErrorMessage(null);
     setSaveSuccess(false);
 
-    fetch(`/api/cms/pages/${selectedSlug}`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`Failed to load page content (${res.status})`);
-        }
-        return res.json();
-      })
+    apiGet<DynamicPageContent>(`/api/cms/pages/${selectedSlug}`)
       .then((data: DynamicPageContent) => {
         if (isMounted) {
           setPageData({
@@ -114,7 +109,7 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
           setLoading(false);
         }
       })
-      .catch((err) => {
+      .catch((_err) => {
         if (isMounted) {
           // Provide an intelligent default structure so the admin can start editing immediately
           setPageData({
@@ -154,17 +149,7 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
     };
 
     try {
-      const response = await fetch(`/api/cms/pages/${selectedSlug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payloadToSave)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Save failed with HTTP code ${response.status}`);
-      }
-
-      const updated = await response.json();
+      const updated = await apiPut<DynamicPageContent>(`/api/cms/pages/${selectedSlug}`, payloadToSave);
       setPageData(updated);
       setSaveSuccess(true);
       if (onPageSaved) onPageSaved(updated);
@@ -394,15 +379,15 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
             1. Select Website Category (8 Main Categories)
           </span>
           <div className="flex flex-wrap gap-2">
-            {officialWebsiteHierarchy.map((cat) => {
+            {OFFICIAL_HIERARCHY.map((cat) => {
               const isSelected = selectedCategoryKey === cat.key;
               return (
                 <button
                   key={cat.key}
                   onClick={() => {
                     setSelectedCategoryKey(cat.key);
-                    if (cat.pages.length > 0) {
-                      setSelectedSlug(cat.pages[0].slug);
+                    if (cat.subsections.length > 0) {
+                      setSelectedSlug(cat.subsections[0].slug);
                     }
                   }}
                   className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
@@ -421,10 +406,10 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
         {/* Subsection Selector Pills */}
         <div className="pt-2 border-t border-slate-100">
           <span className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-            2. Select Subsection to Edit ({currentCategory.pages.length} Subsections Available)
+            2. Select Subsection to Edit ({currentCategory.subsections.length} Subsections Available)
           </span>
           <div className="flex flex-wrap gap-2">
-            {currentCategory.pages.map((p) => {
+            {currentCategory.subsections.map((p) => {
               const isSelected = selectedSlug === p.slug;
               return (
                 <button
