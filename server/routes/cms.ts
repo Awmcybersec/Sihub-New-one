@@ -153,17 +153,6 @@ const officialNavHierarchy = [
       { key: 'donors-supporters', label: 'Donors & Supporters', view: 'subsection_page', url: '/partnerships/donors-supporters', desc: 'Multilateral agencies, foundations & diaspora' },
       { key: 'collaboration-opportunities', label: 'Collaboration Opportunities', view: 'subsection_page', url: '/partnerships/collaboration-opportunities', desc: 'Joint funding calls, pilot projects & research' }
     ]
-  },
-  {
-    key: 'portal-access',
-    label: 'Portal Access',
-    view: 'learner_portal',
-    url: '/learner',
-    subItems: [
-      { key: 'learner-portal', label: 'Learner Portal', view: 'learner_portal', url: '/learner', desc: 'Student coursework, assignments, and certificates' },
-      { key: 'startup-portal', label: 'Startup Portal', view: 'startup_portal', url: '/founder', desc: 'Incubation metrics, founder desk, and investor decks' },
-      { key: 'partner-portal', label: 'Partner Portal', view: 'partner_portal', url: '/partner', desc: 'MoUs, funding allocations, and co-sponsored cohorts' }
-    ]
   }
 ];
 
@@ -175,9 +164,12 @@ router.get('/navigation', asyncRoute(async (_req, res) => {
     const content = entry?.content && typeof entry.content === 'object' && !Array.isArray(entry.content)
       ? entry.content as Record<string, unknown>
       : {};
-    const categories = Array.isArray(content.categories) && content.categories.length > 0
+    const rawCategories = Array.isArray(content.categories) && content.categories.length > 0
       ? content.categories
       : officialNavHierarchy;
+    const categories = (rawCategories as Array<{ key?: string }>).filter(
+      cat => cat && cat.key !== 'portal-access' && !String(cat.key).toLowerCase().includes('portal')
+    );
     res.json({ categories });
   } catch {
     res.json({ categories: officialNavHierarchy });
@@ -217,6 +209,9 @@ router.put('/navigation', authenticate, authorize(...staffRoles), asyncRoute(asy
   });
   const input = schema.safeParse(req.body);
   if (!input.success) throw httpError(400, 'Invalid navigation structure');
+  const sanitizedCategories = input.data.categories.filter(
+    cat => cat.key !== 'portal-access' && !String(cat.key).toLowerCase().includes('portal')
+  );
 
   let entry = await database.cmsEntry.findFirst({
     where: { type: 'page', slug: 'header', deletedAt: null }
@@ -226,7 +221,7 @@ router.put('/navigation', authenticate, authorize(...staffRoles), asyncRoute(asy
     entry = await database.cmsEntry.update({
       where: { id: entry.id },
       data: {
-        content: { categories: input.data.categories } as Prisma.InputJsonValue,
+        content: { categories: sanitizedCategories } as Prisma.InputJsonValue,
         status: PublicationStatus.PUBLISHED,
         publishedAt: new Date()
       }
@@ -237,7 +232,7 @@ router.put('/navigation', authenticate, authorize(...staffRoles), asyncRoute(asy
         type: 'page',
         slug: 'header',
         title: 'Institutional Header Navigation',
-        content: { categories: input.data.categories } as Prisma.InputJsonValue,
+        content: { categories: sanitizedCategories } as Prisma.InputJsonValue,
         status: PublicationStatus.PUBLISHED,
         publishedAt: new Date(),
         authorId: req.authUser!.id

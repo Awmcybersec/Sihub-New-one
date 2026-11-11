@@ -229,6 +229,7 @@ export const Header: React.FC = () => {
       key: 'learner_portal',
       label: 'Learner Portal',
       view: 'learner_portal' as AppView,
+      url: '/learner',
       desc: 'Enrolled student courses, learning progress & certificates',
       icon: <GraduationCap className="w-4 h-4 text-emerald-600" />,
       badge: 'Student LMS'
@@ -237,6 +238,7 @@ export const Header: React.FC = () => {
       key: 'startup_portal',
       label: 'Startup Portal',
       view: 'startup_portal' as AppView,
+      url: '/founder',
       desc: 'Founder accelerator dashboard, milestones & pitches',
       icon: <Rocket className="w-4 h-4 text-cyan-600" />,
       badge: 'Incubation'
@@ -245,13 +247,18 @@ export const Header: React.FC = () => {
       key: 'partner_portal',
       label: 'Partner Portal',
       view: 'partner_portal' as AppView,
+      url: '/partner',
       desc: 'Donor & partner impact tracking, proposals & reports',
       icon: <Handshake className="w-4 h-4 text-indigo-600" />,
       badge: 'Ecosystem'
     }
   ];
   const baseCategories = dbCategories && dbCategories.length > 0 ? dbCategories : officialNavCategories;
-  const managedNavCategories = baseCategories.map(category => ({
+  // Ensure portal-access is filtered out from general category navigation so Portal Access remains strictly singular
+  const filteredBaseCategories = baseCategories.filter(
+    category => category.key !== 'portal-access' && !category.key.toLowerCase().includes('portal')
+  );
+  const managedNavCategories = filteredBaseCategories.map(category => ({
     ...category,
     label: navLabels[category.key] ?? category.label,
     subItems: category.subItems?.map(item => ({
@@ -480,7 +487,7 @@ export const Header: React.FC = () => {
                         return (
                           <button
                             key={portal.key}
-                            onClick={() => handleNavigateWithAnchor(portal.view)}
+                            onClick={() => handleNavigateWithAnchor(portal.view, undefined, undefined, portal.url)}
                             className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between group ${
                               isActive
                                 ? 'bg-cyan-50 text-cyan-800 font-bold border border-cyan-200/80'
@@ -680,7 +687,7 @@ export const Header: React.FC = () => {
                     return (
                       <button
                         key={portal.key}
-                        onClick={() => handleNavigateWithAnchor(portal.view)}
+                        onClick={() => handleNavigateWithAnchor(portal.view, undefined, undefined, portal.url)}
                         className={`w-full min-h-[44px] text-left p-3 rounded-xl border transition-all active:scale-98 flex items-center justify-between ${
                           isActive
                             ? 'bg-cyan-50/80 border-cyan-300 text-cyan-900 shadow-xs'
