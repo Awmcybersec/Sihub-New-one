@@ -745,6 +745,15 @@ export async function ensureWebsiteStructureSeeded(database: Pick<typeof prisma,
             authorId: authorId ?? null
           }
         });
+      } else if (existing.deletedAt !== null) {
+        await database.cmsEntry.update({
+          where: { id: existing.id },
+          data: {
+            deletedAt: null,
+            status: PublicationStatus.PUBLISHED,
+            publishedAt: existing.publishedAt || new Date()
+          }
+        });
       }
     }
   } catch (err) {

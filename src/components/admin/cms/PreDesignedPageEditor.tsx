@@ -95,7 +95,7 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
     setErrorMessage(null);
     setSaveSuccess(false);
 
-    apiGet<DynamicPageContent>(`/api/cms/pages/${selectedSlug}`)
+    apiGet<DynamicPageContent>(`/api/cms/pages/${selectedSlug}?edit=true`)
       .then((data: DynamicPageContent) => {
         if (isMounted) {
           setPageData({
@@ -142,9 +142,13 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
     setErrorMessage(null);
     setSaveSuccess(false);
 
+    const isPublishing = publishState !== undefined ? publishState : (pageData.published ?? true);
+
     const payloadToSave: DynamicPageContent = {
       ...pageData,
-      published: publishState !== undefined ? publishState : (pageData.published ?? true),
+      published: isPublishing,
+      publish: isPublishing,
+      status: isPublishing ? 'PUBLISHED' : 'DRAFT',
       updatedAt: new Date().toISOString()
     };
 
@@ -152,6 +156,7 @@ export const PreDesignedPageEditor: React.FC<PreDesignedPageEditorProps> = ({
       const updated = await apiPut<DynamicPageContent>(`/api/cms/pages/${selectedSlug}`, payloadToSave);
       setPageData(updated);
       setSaveSuccess(true);
+      window.dispatchEvent(new CustomEvent('sihub-cms-update', { detail: { slug: selectedSlug, published: isPublishing } }));
       if (onPageSaved) onPageSaved(updated);
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err: any) {

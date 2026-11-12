@@ -4,10 +4,11 @@
  * SiHub Digital Ecosystem - Institutional Website Footer
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { BrandLogo } from '../common/BrandLogo';
 import { useCmsPage } from '../../hooks/useCmsPage';
+import { apiGet } from '../../services/apiClient';
 import {
   MapPin,
   Mail,
@@ -15,7 +16,8 @@ import {
   Globe,
   ArrowUpRight,
   ShieldCheck,
-  Heart
+  Clock,
+  ExternalLink
 } from 'lucide-react';
 
 type FooterCmsPage = {
@@ -33,12 +35,50 @@ type FooterCmsPage = {
   closingLine?: string;
 };
 
+interface GlobalWebsiteSettings {
+  institutionName?: string;
+  siteTitle?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactAddress?: string;
+  additionalContact?: string;
+  copyrightText?: string;
+  mapUrl?: string;
+  socialLinks?: Record<string, string>;
+}
+
 export const Footer: React.FC = () => {
   const { navigateTo, language, t } = useApp();
   const { page: cmsFooter } = useCmsPage<FooterCmsPage>('footer');
+  const [globalSettings, setGlobalSettings] = useState<GlobalWebsiteSettings | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSettings = () => {
+      apiGet<GlobalWebsiteSettings>('/api/cms/settings')
+        .then(res => {
+          if (isMounted) setGlobalSettings(res);
+        })
+        .catch(() => {});
+    };
+    loadSettings();
+    window.addEventListener('sihub-cms-update', loadSettings);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('sihub-cms-update', loadSettings);
+    };
+  }, []);
+
   const portalLabels = cmsFooter?.groups?.[0]?.items ?? [];
   const communityLabels = cmsFooter?.groups?.[1]?.items ?? [];
   const hubs = cmsFooter?.hubs;
+
+  const displayAddress = globalSettings?.contactAddress || cmsFooter?.address || 'KM4 Airport Road, Wadajir District, Mogadishu, Somalia';
+  const displayEmail = globalSettings?.contactEmail || cmsFooter?.email || 'info@sihub.so';
+  const displayPhone = globalSettings?.contactPhone || cmsFooter?.phone || '+252 61 500 0000';
+  const displayHours = globalSettings?.additionalContact || 'Mon - Fri: 8:00 AM - 6:00 PM EAT';
+  const displayCopyright = globalSettings?.copyrightText || `© ${new Date().getFullYear()} Somali Innovation Hub (SiHub). All Rights Reserved.`;
+  const mapUrl = globalSettings?.mapUrl;
 
   return (
     <footer className="bg-slate-950 text-slate-300 border-t border-slate-800">
@@ -80,27 +120,103 @@ export const Footer: React.FC = () => {
           {/* Column 1: Organization & Logo */}
           <div className="lg:col-span-2 space-y-4">
             <BrandLogo size="lg" showSubtitle={true} lightText={true} />
-            {cmsFooter?.organizationDescription && <p className="text-xs text-slate-400 leading-relaxed max-w-sm">{cmsFooter.organizationDescription}</p>}
+            <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
+              {cmsFooter?.organizationDescription ??
+                'Somalia\'s premier innovation ecosystem, digital academy, and startup accelerator empowering the next generation of founders and technologists across 4 regional hub stations.'}
+            </p>
 
-            <div className="space-y-2 text-xs text-slate-300 pt-2">
-              {cmsFooter?.address && <div className="flex items-start gap-2.5">
+            <div className="space-y-2.5 text-xs text-slate-300 pt-2">
+              <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span>{cmsFooter.address}</span>
-              </div>}
-              {cmsFooter?.email && <div className="flex items-center gap-2.5">
+                <div className="space-y-1">
+                  <span>{displayAddress}</span>
+                  {mapUrl && (
+                    <div>
+                      <a
+                        href={mapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 underline font-semibold"
+                      >
+                        <span>View Campus Map</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>{cmsFooter.email}</span>
-              </div>}
-              {cmsFooter?.phone && <div className="flex items-center gap-2.5">
+                <a href={`mailto:${displayEmail}`} className="hover:text-cyan-400 transition-colors">
+                  {displayEmail}
+                </a>
+              </div>
+              <div className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>{cmsFooter.phone}</span>
-              </div>}
+                <a href={`tel:${displayPhone.replace(/\s+/g, '')}`} className="hover:text-cyan-400 transition-colors">
+                  {displayPhone}
+                </a>
+              </div>
+              {displayHours && (
+                <div className="flex items-center gap-2.5 text-slate-400">
+                  <Clock className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>{displayHours}</span>
+                </div>
+              )}
             </div>
+
+            {/* Social Links */}
+            {globalSettings?.socialLinks && Object.keys(globalSettings.socialLinks).length > 0 && (
+              <div className="pt-2 flex items-center gap-3 text-xs">
+                {globalSettings.socialLinks.twitter && (
+                  <a
+                    href={globalSettings.socialLinks.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors text-[11px] font-semibold"
+                  >
+                    Twitter / X
+                  </a>
+                )}
+                {globalSettings.socialLinks.linkedin && (
+                  <a
+                    href={globalSettings.socialLinks.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors text-[11px] font-semibold"
+                  >
+                    LinkedIn
+                  </a>
+                )}
+                {globalSettings.socialLinks.github && (
+                  <a
+                    href={globalSettings.socialLinks.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors text-[11px] font-semibold"
+                  >
+                    GitHub
+                  </a>
+                )}
+                {globalSettings.socialLinks.youtube && (
+                  <a
+                    href={globalSettings.socialLinks.youtube}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors text-[11px] font-semibold"
+                  >
+                    YouTube
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Column 2: Dedicated Ecosystem Portals */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white">{cmsFooter?.groups?.[0]?.title ?? 'Ecosystem Portals'}</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+              {cmsFooter?.groups?.[0]?.title ?? 'Ecosystem Portals'}
+            </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <button onClick={() => navigateTo('learner_portal')} className="hover:text-cyan-400 transition-colors flex items-center gap-1">
@@ -132,7 +248,9 @@ export const Footer: React.FC = () => {
 
           {/* Column 3: Community & Opportunities */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white">{cmsFooter?.groups?.[1]?.title ?? 'Community & Impact'}</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+              {cmsFooter?.groups?.[1]?.title ?? 'Community & Impact'}
+            </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <button onClick={() => navigateTo('events')} className="hover:text-cyan-400 transition-colors">
@@ -154,7 +272,11 @@ export const Footer: React.FC = () => {
                   {communityLabels[3] ?? 'Research & Publications'}
                 </button>
               </li>
-              <li><button onClick={() => navigateTo('submission_tracking')} className="hover:text-cyan-400 transition-colors">Track a submission</button></li>
+              <li>
+                <button onClick={() => navigateTo('submission_tracking')} className="hover:text-cyan-400 transition-colors">
+                  Track a submission
+                </button>
+              </li>
               <li>
                 <button onClick={() => navigateTo('partnerships')} className="hover:text-cyan-400 transition-colors">
                   {communityLabels[4] ?? 'Institutional Partners'}
@@ -164,21 +286,25 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Column 4: Regional Hubs & Governance */}
-          {hubs?.length ? <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white">Regional Hubs</h4>
-            <div className="text-xs text-slate-400 space-y-2">
-              {hubs.map(hub => <div key={hub.name}>
-                <strong className="text-slate-200">{hub.name}</strong>
-                {hub.description && <p className="text-[11px]">{hub.description}</p>}
-              </div>)}
+          {hubs?.length ? (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-white">Regional Hubs</h4>
+              <div className="text-xs text-slate-400 space-y-2">
+                {hubs.map(hub => (
+                  <div key={hub.name}>
+                    <strong className="text-slate-200">{hub.name}</strong>
+                    {hub.description && <p className="text-[11px]">{hub.description}</p>}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div> : null}
+          ) : null}
         </div>
 
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <span>© {new Date().getFullYear()} Somali Innovation Hub (SiHub). All Rights Reserved.</span>
+            <span>{displayCopyright}</span>
           </div>
 
           <div className="flex items-center gap-4 text-[11px]">
@@ -186,7 +312,12 @@ export const Footer: React.FC = () => {
               Contact Us
             </button>
             <span>•</span>
-            {cmsFooter?.certification && <span className="flex items-center gap-1 text-emerald-400 font-semibold"><ShieldCheck className="w-3.5 h-3.5" />{cmsFooter.certification}</span>}
+            {cmsFooter?.certification && (
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {cmsFooter.certification}
+              </span>
+            )}
             {cmsFooter?.closingLine && <span className="text-slate-400">{cmsFooter.closingLine}</span>}
           </div>
         </div>
@@ -194,3 +325,4 @@ export const Footer: React.FC = () => {
     </footer>
   );
 };
+

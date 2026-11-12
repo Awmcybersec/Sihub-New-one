@@ -21,6 +21,12 @@ export const createCmsRouter = (
   }
 
 const router = Router();
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 const staffRoles = [Role.OWNER, Role.SUPER_ADMIN, Role.ADMIN] as const;
 const slugSchema = z.string().trim().min(1).max(160).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const entrySchema = z.object({
@@ -253,29 +259,50 @@ router.put('/navigation', authenticate, authorize(...staffRoles), asyncRoute(asy
 
 router.get('/settings', asyncRoute(async (_req, res) => {
   const defaultSettings = {
+    institutionName: 'Somali Innovation Hub (SiHub)',
     siteTitle: 'Somali Innovation Hub (SiHub)',
     siteMetaDesc: 'Pioneering center for grassroots innovation, digital skills, technology ventures, and social transformation in Somalia.',
     contactEmail: 'info@sihub.so',
     contactPhone: '+252 61 500 0000',
     contactAddress: 'KM4 Airport Road, Wadajir District, Mogadishu, Somalia',
-    socialLinks: {},
+    additionalContact: 'Mon - Fri: 8:00 AM - 6:00 PM EAT',
+    copyrightText: `© ${new Date().getFullYear()} Somali Innovation Hub (SiHub). All Rights Reserved.`,
+    mapUrl: '',
+    socialLinks: {
+      twitter: 'https://twitter.com/sihub_so',
+      linkedin: 'https://linkedin.com/company/sihub',
+      github: 'https://github.com/sihub-so',
+      youtube: 'https://youtube.com/@sihub_so'
+    },
+    usefulLinks: [],
     branding: {}
   };
   try {
     const entry = await database.cmsEntry.findFirst({
-      where: { type: 'page', slug: 'settings', status: PublicationStatus.PUBLISHED, deletedAt: null }
+      where: { type: 'page', slug: 'settings', deletedAt: null }
+    }) || await database.cmsEntry.findFirst({
+      where: { type: 'page', slug: 'settings' }
     });
     const content = entry?.content && typeof entry.content === 'object' && !Array.isArray(entry.content)
       ? entry.content as Record<string, unknown>
       : {};
     res.json({
+      institutionName: content.institutionName || content.siteTitle || defaultSettings.institutionName,
       siteTitle: content.siteTitle || defaultSettings.siteTitle,
       siteMetaDesc: content.siteMetaDesc || defaultSettings.siteMetaDesc,
       contactEmail: content.contactEmail || defaultSettings.contactEmail,
       contactPhone: content.contactPhone || defaultSettings.contactPhone,
       contactAddress: content.contactAddress || defaultSettings.contactAddress,
+      additionalContact: content.additionalContact || content.operatingHours || defaultSettings.additionalContact,
+      copyrightText: content.copyrightText || defaultSettings.copyrightText,
+      mapUrl: content.mapUrl || defaultSettings.mapUrl,
       socialLinks: content.socialLinks || defaultSettings.socialLinks,
-      branding: content.branding || defaultSettings.branding
+      usefulLinks: content.usefulLinks || defaultSettings.usefulLinks,
+      branding: content.branding || defaultSettings.branding,
+      seo: content.seo || {},
+      design: content.design || {},
+      footer: content.footer || {},
+      settings: content
     });
   } catch {
     res.json(defaultSettings);
@@ -284,28 +311,42 @@ router.get('/settings', asyncRoute(async (_req, res) => {
 
 router.put('/settings', authenticate, authorize(...staffRoles), asyncRoute(async (req, res) => {
   const settingsSchema = z.object({
+    institutionName: z.string().trim().max(200).optional(),
     siteTitle: z.string().trim().min(1).max(200).optional(),
     siteMetaDesc: z.string().max(2000).optional(),
-    contactEmail: z.string().email().optional(),
+    contactEmail: z.string().max(254).optional(),
     contactPhone: z.string().max(100).optional(),
     contactAddress: z.string().max(500).optional(),
+    additionalContact: z.string().max(500).optional(),
+    copyrightText: z.string().max(500).optional(),
+    mapUrl: z.string().max(2000).optional(),
     socialLinks: z.record(z.string(), z.string()).optional(),
-    branding: z.record(z.string(), z.unknown()).optional()
-  });
+    usefulLinks: z.array(z.record(z.string(), z.unknown())).optional(),
+    branding: z.record(z.string(), z.unknown()).optional(),
+    seo: z.record(z.string(), z.unknown()).optional(),
+    design: z.record(z.string(), z.unknown()).optional(),
+    footer: z.record(z.string(), z.unknown()).optional()
+  }).passthrough();
   const input = settingsSchema.safeParse(req.body);
   if (!input.success) throw httpError(400, 'Invalid website settings');
 
   let entry = await database.cmsEntry.findFirst({
-    where: { type: 'page', slug: 'settings', deletedAt: null }
+    where: { type: 'page', slug: 'settings' }
   });
   if (entry) {
+    const existingContent = (entry.content && typeof entry.content === 'object' && !Array.isArray(entry.content))
+      ? entry.content as Record<string, unknown>
+      : {};
+    const mergedContent = { ...existingContent, ...input.data };
+
     await recordRevision(entry, req.authUser!.id);
     entry = await database.cmsEntry.update({
       where: { id: entry.id },
       data: {
-        content: input.data as Prisma.InputJsonValue,
+        content: mergedContent as Prisma.InputJsonValue,
         status: PublicationStatus.PUBLISHED,
-        publishedAt: new Date()
+        publishedAt: new Date(),
+        deletedAt: null
       }
     });
   } else {
@@ -329,7 +370,7 @@ router.put('/settings', authenticate, authorize(...staffRoles), asyncRoute(async
       entityId: entry.id
     }
   });
-  res.json({ settings: input.data, entryId: entry.id });
+  res.json({ settings: entry.content, entryId: entry.id });
 }));
 
 
@@ -630,23 +671,44 @@ router.post('/admin/:id/revisions/:revisionId/restore', authenticate, authorize(
 
   router.get('/pages/:slug', asyncRoute(async (req, res) => {
     const { slug } = req.params;
+    const isPreview = req.query.preview === 'true';
+    const isEdit = req.query.edit === 'true';
     const dbEntry = await database.cmsEntry.findFirst({
       where: { type: 'page', slug, deletedAt: null }
     });
 
     if (dbEntry) {
-      const content = (stripInternalCmsFields(dbEntry.content) || {}) as Record<string, unknown>;
+      const rawContent = (dbEntry.content && typeof dbEntry.content === 'object' && !Array.isArray(dbEntry.content))
+        ? dbEntry.content as Record<string, unknown>
+        : {};
+      
+      let content: Record<string, unknown>;
+      let currentTitle = dbEntry.title;
+      let currentSummary = dbEntry.summary;
+      const hasDraft = Boolean(rawContent._draft && typeof rawContent._draft === 'object');
+
+      if ((isPreview || isEdit) && hasDraft) {
+        const draftObj = rawContent._draft as Record<string, unknown>;
+        currentTitle = (draftObj.title as string) || currentTitle;
+        currentSummary = (draftObj.summary as string) || currentSummary;
+        const { _draft: _d, _published: _p, ...cleanDraft } = draftObj;
+        content = cleanDraft;
+      } else {
+        content = (stripInternalCmsFields(dbEntry.content) || {}) as Record<string, unknown>;
+      }
+
       return res.json({
         id: dbEntry.id,
         slug: dbEntry.slug,
-        title: dbEntry.title,
-        heading: (content.heading as string) || dbEntry.title,
-        summary: dbEntry.summary || (content.summary as string) || (content.description as string) || '',
-        description: (content.description as string) || dbEntry.summary || '',
+        title: currentTitle,
+        heading: (content.heading as string) || currentTitle,
+        summary: currentSummary || (content.summary as string) || (content.description as string) || '',
+        description: (content.description as string) || currentSummary || '',
         subheading: (content.subheading as string) || '',
         heroBadge: (content.heroBadge as string) || '',
         status: dbEntry.status,
         published: dbEntry.status === PublicationStatus.PUBLISHED,
+        hasDraft,
         updatedAt: dbEntry.updatedAt,
         ...content
       });
@@ -676,12 +738,11 @@ router.post('/admin/:id/revisions/:revisionId/restore', authenticate, authorize(
   router.put('/pages/:slug', asyncRoute(async (req, res) => {
     const { slug } = req.params;
     const body = req.body || {};
-    const isPublish = body.published !== false;
-    const status = isPublish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT;
+    const isPublish = body.published !== false && body.publish !== false && body.status !== 'DRAFT';
     const title = body.title || body.heading || slug;
     const summary = body.summary || body.description || '';
 
-    const { id: _ignoreId, slug: _ignoreSlug, title: _t, summary: _s, status: _st, published: _p, ...contentData } = body;
+    const { id: _ignoreId, slug: _ignoreSlug, title: _t, summary: _s, status: _st, published: _p, publish: _pub, ...contentData } = body;
 
     const existing = await database.cmsEntry.findFirst({
       where: { type: 'page', slug, deletedAt: null }
@@ -689,26 +750,73 @@ router.post('/admin/:id/revisions/:revisionId/restore', authenticate, authorize(
 
     let savedEntry;
     if (existing) {
-      savedEntry = await database.cmsEntry.update({
-        where: { id: existing.id },
-        data: {
-          title,
-          summary,
-          content: contentData as Prisma.InputJsonValue,
-          status,
-          publishedAt: isPublish ? (existing.publishedAt || new Date()) : null
-        }
-      });
+      const isCurrentlyPublished = existing.status === PublicationStatus.PUBLISHED;
+      const existingContentObj = (existing.content && typeof existing.content === 'object' && !Array.isArray(existing.content))
+        ? existing.content as Record<string, unknown>
+        : {};
+
+      if (isCurrentlyPublished && !isPublish) {
+        // DRAFT PROTECTION: Page is currently published.
+        // Keep status as PUBLISHED so public visitors continue seeing the previous published version.
+        // Store the working draft in _draft and preserve live published content in _published.
+        const liveContent = existingContentObj._published ?? stripInternalCmsFields(existing.content);
+        const { _draft: _d, _published: _p, ...cleanDraft } = contentData;
+        const nextContent = {
+          ...(typeof liveContent === 'object' && !Array.isArray(liveContent) ? liveContent : {}),
+          _published: liveContent,
+          _draft: {
+            ...cleanDraft,
+            title,
+            summary,
+            savedAt: new Date().toISOString()
+          }
+        };
+
+        savedEntry = await database.cmsEntry.update({
+          where: { id: existing.id },
+          data: {
+            content: nextContent as Prisma.InputJsonValue,
+            status: PublicationStatus.PUBLISHED
+          }
+        });
+      } else if (isPublish) {
+        // PUBLISH: Clean any drafts and update live published content immediately
+        const { _draft: _d, _published: _p, ...cleanContent } = contentData;
+        savedEntry = await database.cmsEntry.update({
+          where: { id: existing.id },
+          data: {
+            title,
+            summary,
+            content: cleanContent as Prisma.InputJsonValue,
+            status: PublicationStatus.PUBLISHED,
+            publishedAt: new Date()
+          }
+        });
+      } else {
+        // Page was a draft and is being saved as a draft
+        const { _draft: _d, _published: _p, ...cleanContent } = contentData;
+        savedEntry = await database.cmsEntry.update({
+          where: { id: existing.id },
+          data: {
+            title,
+            summary,
+            content: cleanContent as Prisma.InputJsonValue,
+            status: PublicationStatus.DRAFT,
+            publishedAt: null
+          }
+        });
+      }
     } else {
       const author = await prisma.user.findFirst({ where: { role: Role.OWNER } });
+      const { _draft: _d, _published: _p, ...cleanContent } = contentData;
       savedEntry = await database.cmsEntry.create({
         data: {
           type: 'page',
           slug,
           title,
           summary,
-          content: contentData as Prisma.InputJsonValue,
-          status,
+          content: cleanContent as Prisma.InputJsonValue,
+          status: isPublish ? PublicationStatus.PUBLISHED : PublicationStatus.DRAFT,
           publishedAt: isPublish ? new Date() : null,
           authorId: author?.id
         }
